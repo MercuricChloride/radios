@@ -35,10 +35,8 @@
                        'listen listen
                        'print #(dispatch [:radio-test.events/log %])
                        'reset #(dispatch [:radio-test.events/reset-context])
+                       'create-frame #(dispatch [:radio-test.events/create-frame %])
                        '*parent-id* parent-id
-                       'render #(let [root-element (.getElementById js/document @parent-id)]
-                                  (rdom/unmount-component-at-node root-element)
-                                  (rdom/render % root-element)
-                                  nil)}
+                       'render render}
                       bindings)
      :namespaces {'rf (sci/copy-ns re-frame.core nil)}})))

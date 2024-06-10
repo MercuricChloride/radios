@@ -20,10 +20,9 @@
   (let [project-name (get-project-name)]
     {:name "radio-playground 📻"
      :project-name project-name
-     :sci {:ctx context
-           :stations {:default (make-station project-name :default "(emit :some-value 123) 123")
-                      :another (make-station project-name :another "@(listen :some-value)")
-                      :renderer (make-station project-name :renderer "(defn test-component []
+     :namespaces {(keyword project-name) {:default (make-station project-name :default "(emit :some-value 123)")
+                                          :another (make-station project-name :another "@(listen :some-value)")
+                                          :renderer (make-station project-name :renderer "(defn test-component []
     (let [input @(listen :some-value)]
     [:div
       [:h1 \"The value is:\"]
@@ -32,6 +31,8 @@
 (defn example-button []
     [:button {:on-click #(emit :some-value 42069)} \"Click me!\"])
 
-(render [test-component])")}
-           :global {:eval-result nil}
+(render [test-component])")}}
+     :sci {:ctx context
+           :global {:eval-result nil
+                    :shell-visible nil}
            :channels {}}}))

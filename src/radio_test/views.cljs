@@ -1,24 +1,33 @@
 (ns radio-test.views
   (:require
    [radio-test.events :as events]
+   [radio-test.shortcuts :refer [global-eval rp-example]]
    [radio-test.subs :as subs]
-   [radio-test.shortcuts :refer [rp-example global-eval]]
-   [re-com.box :refer [v-box]]
+   [re-com.box :refer [h-box v-box]]
    [re-com.buttons :refer [button]]
-   [re-com.core :as re-com :refer [at line]]
+   [re-com.core :as re-com :refer [at border]]
    [re-com.input-text :refer [input-textarea]]
    [re-frame.core :as re-frame :refer [dispatch]]
-   [re-pressed.core :as rp]))
+   [re-pressed.core :as rp]
+   [reagent.core :as r]
+   ["react-draggable" :as -draggable]
+   ["react-resizable" :refer [ResizableBox]]))
+
+(def draggable (r/adapt-react-class -draggable))
+(def resizable (r/adapt-react-class ResizableBox))
 
 (defn dispatch-keydown-rules []
   (re-frame/dispatch
    [::rp/set-keydown-rules
-    {:event-keys [rp-example ; just a sample shortcut
-                  global-eval ; ctrl-e will eval all items in the stations
+    {:event-keys [rp-example        ; just a sample shortcut
+                  global-eval       ; ctrl-e will eval all items in the stations
                   ]
      :clear-keys
      [[{:keyCode 27} ;; escape
        ]]}]))
+
+;; (defn shell-interface []
+;;   (let [visible (re-frame/subscribe [::subs/])]))
 
 (defn display-re-pressed-example []
   (let [re-pressed-example (re-frame/subscribe [::subs/re-pressed-example])]
@@ -57,22 +66,33 @@
 (defn sci-interaction
   ([] [sci-interaction (keyword (gensym "station-"))])
   ([key]
-   (let [{:keys [input-text eval-result]} @(re-frame/subscribe [::subs/sci-values key])
-         project-name @(re-frame/subscribe [::subs/project-name])
-         key-string (key->js key)]
-     [v-box
-      :src (at)
-      :height "100%"
-      :width "20%"
-      :children [[:div {:id (str project-name "." key-string)}
-                  [:h2 key-string]]
-                 [input-textarea
-                  :model input-text
-                  :on-change #(dispatch [::events/update-input-text key %])]
-                 [button
-                  :label "eval"
-                  :on-click #(dispatch [::events/eval-sci key input-text])]
-                 [:p (or eval-result "Nil result!")]]])))
+   (let [project-name @(re-frame/subscribe [::subs/project-name])
+         {:keys [input-text eval-result]} @(re-frame/subscribe [::subs/sci-values project-name key])
+         key-string (key->js key)
+         ns-string (str project-name "." key-string)]
+     [border
+      :child [v-box
+              :src (at)
+              :height "100%"
+              :width "20%"
+              :children [[:div {:id (str project-name "." key-string)}
+                          [:h2 key-string]]
+                         [input-textarea
+                          :model input-text
+                          :rows 7
+                          :change-on-blur? true
+                          :on-change #(dispatch [::events/update-input-text project-name key %])]
+                         [h-box
+                          :children [[button
+                                      :label "eval"
+                                      :on-click #(dispatch [::events/eval-sci key input-text])]
+                                     [button
+                                      :label "save"
+                                      :on-click #(dispatch [::events/store-value ns-string input-text])]
+                                     [button
+                                      :label "load"
+                                      :on-click #(dispatch [::events/load-input-text])]]]
+                         [:p (or eval-result "Nil result!")]]]])))
 
 (defn station-editors
   []
@@ -86,8 +106,12 @@
   [re-com/v-box
    :src      (at)
    :height   "100%"
+   :attr {:id "root-frame-panel"
+          :on-context-menu #(do
+                              (.preventDefault %)
+                              (.log js/console "context-menu-brah"))}
    :children [[title]
-              [:div {:id "test-renderer"} "hi"]
+              [draggable [:div {:id "test-renderer"} "hi"]]
               [v-box
                :src (at)
                :height "100%"

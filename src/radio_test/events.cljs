@@ -1,13 +1,40 @@
 (ns radio-test.events
   (:require
-   [cljs.pprint :refer [cl-format]]
    [day8.re-frame.tracing :refer-macros [fn-traced]]
    [radio-test.db :as db]
    [radio-test.sci :refer [init-context parent-id]]
-   [re-frame.core :as re-frame]
+   [re-frame.core :as re-frame :refer [inject-cofx]]
    [sci.core :as sci]
-   [clojure.edn :as edn]
-   [radio-test.config :as config]))
+   [reagent.dom :as rdom]))
+
+;; Stores an item in local storage
+(re-frame/reg-fx
+ :local-store
+ (fn [[path value]]
+   (.setItem js/localStorage (clj->js path) (prn-str value))))
+
+;; Loads local-storage into the cofx map
+(re-frame/reg-cofx
+ :local-get
+ (fn [cfx path]
+   (assoc cfx :local-storage (.getItem js/localStorge (clj->js path)))))
+
+;; This will grab an element from the dom, and store it in "root-element" in the cofx map
+(re-frame/reg-cofx
+ :root-element
+ (fn [cfx id]
+   (assoc cfx :root-element (.getElementById js/document (clj->js id)))))
+
+;; This will create a new frame in the app
+(re-frame/reg-fx
+ :create-frame
+ (fn [[frame-id component]]
+   (let [app-root (.getElementById js/document "app")
+         el (.createElement js/document "div")]
+     (set! (.-id el) frame-id)
+     (.appendChild app-root el)
+     (rdom/unmount-component-at-node el)
+     (rdom/render (or component [:h1 "hello!"]) el))))
 
 ;; INIT DB
 (re-frame/reg-event-db
@@ -25,9 +52,13 @@
 ;; -------------------------
 
 (re-frame/reg-event-db
+ ::load-input-text
+ (fn [db [_ ns-string]]))
+
+(re-frame/reg-event-db
  ::update-input-text
- (fn [db [_ key value]]
-   (assoc-in db [:sci :stations key :input-text] value)))
+ (fn [db [_ project key value]]
+   (assoc-in db [:namespaces (keyword project) key :input-text] value)))
 
 (re-frame/reg-event-fx
  ::log
@@ -47,7 +78,8 @@
  ::eval-sci
  (fn [db [_ key input]]
    (let [ctx (get-in db [:sci :ctx])
-         result (sci/binding [parent-id (str "something" "." (key->js key))]
+         project-name (:project-name db)
+         result (sci/binding [parent-id (str project-name "." (key->js key))]
                   (sci/eval-string* ctx input))]
      (assoc-in db [:sci :stations key :eval-result] result))))
 
@@ -64,6 +96,14 @@
          result (sci/eval-string* ctx source)]
      (assoc-in db [:sci :global :eval-result] result))))
 
+;; Frame Events
+;; For creating new window frames
+(re-frame/reg-event-fx
+ ::create-frame
+ [(inject-cofx :root-element)]
+ (fn [_cfx [_ frame-id component]]
+   {:create-frame [frame-id component]}))
+
 ;; Storing Values
 (re-frame/reg-event-db
  ::set-var
@@ -71,3 +111,8 @@
    (if (coll? key)
      (assoc-in db (vec (concat [:sci :vars] key)) value)
      (assoc-in db [:sci :vars key] value))))
+
+(re-frame/reg-event-fx
+ ::store-value
+ (fn [_cofx [_ key value]]
+   {:local-store [key value]}))

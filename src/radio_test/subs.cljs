@@ -21,9 +21,9 @@
 
 (re-frame/reg-sub
  ::sci-values
- (fn [db [_ key]]
-   (or (get-in db [:sci :stations key])
-       {:input-text (cl-format nil "(ns ~a)" (key->js key))
+ (fn [db [_ project-name key]]
+   (or (get-in db [:namespaces (keyword project-name) key])
+       {:input-text (cl-format nil "(ns ~a.~a)" project-name (key->js key))
         :eval-result nil})))
 
 (re-frame/reg-sub
@@ -40,7 +40,8 @@
 (re-frame/reg-sub
  ::station-keys
  (fn [db [_]]
-   (keys (get-in db [:sci :stations]))))
+   (let [project-name (keyword (:project-name db))]
+     (keys (get-in db [:namespaces project-name])))))
 
 ;; Fetch a global sci var
 (re-frame/reg-sub
