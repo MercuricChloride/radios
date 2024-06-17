@@ -1,59 +1,22 @@
 (ns radio-test.views
   (:require
+   ["react-draggable" :as -draggable]
+   ["react-resizable" :refer [ResizableBox]]
+   [clojure.string :as str]
    [radio-test.events :as events]
-   [radio-test.shortcuts :refer [global-eval rp-example]]
+   [radio-test.re-pressed :refer [dispatch-keydown-rules]]
+   [radio-test.sci :refer [listen]]
    [radio-test.subs :as subs]
    [re-com.box :refer [h-box v-box]]
    [re-com.buttons :refer [button]]
-   [re-com.core :as re-com :refer [at border]]
+   [re-com.core :as re-com :refer [at box popover-anchor-wrapper
+                                   popover-content-wrapper typeahead]]
    [re-com.input-text :refer [input-textarea]]
    [re-frame.core :as re-frame :refer [dispatch]]
-   [re-pressed.core :as rp]
-   [reagent.core :as r]
-   ["react-draggable" :as -draggable]
-   ["react-resizable" :refer [ResizableBox]]))
+   [reagent.core :as r]))
 
 (def draggable (r/adapt-react-class -draggable))
 (def resizable (r/adapt-react-class ResizableBox))
-
-(defn dispatch-keydown-rules []
-  (re-frame/dispatch
-   [::rp/set-keydown-rules
-    {:event-keys [rp-example        ; just a sample shortcut
-                  global-eval       ; ctrl-e will eval all items in the stations
-                  ]
-     :clear-keys
-     [[{:keyCode 27} ;; escape
-       ]]}]))
-
-;; (defn shell-interface []
-;;   (let [visible (re-frame/subscribe [::subs/])]))
-
-(defn display-re-pressed-example []
-  (let [re-pressed-example (re-frame/subscribe [::subs/re-pressed-example])]
-    [:div
-     [:p
-      "Re-pressed is listening for keydown events. However, re-pressed
-      won't trigger any events until you set some keydown rules."]
-
-     [:div
-      [re-com/button
-       :src      (at)
-       :on-click dispatch-keydown-rules
-       :label    "set keydown rules"]]
-
-     [:p
-      [:span
-       "After clicking the button, you will have defined a rule that
-       will display a message when you type "]
-      [:strong [:code "hello"]]
-      [:span ". So go ahead, try it out!"]]
-
-     (when-let [rpe @re-pressed-example]
-       [re-com/alert-box
-        :src        (at)
-        :alert-type :info
-        :body       rpe])]))
 
 (defn title []
   (let [name (re-frame/subscribe [::subs/name])]
@@ -63,58 +26,114 @@
      :level :level1
      :attr {:id "something"}]))
 
-(defn sci-interaction
-  ([] [sci-interaction (keyword (gensym "station-"))])
-  ([key]
-   (let [project-name @(re-frame/subscribe [::subs/project-name])
-         {:keys [input-text eval-result]} @(re-frame/subscribe [::subs/sci-values project-name key])
-         key-string (key->js key)
-         ns-string (str project-name "." key-string)]
-     [border
-      :child [v-box
-              :src (at)
-              :height "100%"
-              :width "20%"
-              :children [[:div {:id (str project-name "." key-string)}
-                          [:h2 key-string]]
-                         [input-textarea
-                          :model input-text
-                          :rows 7
-                          :change-on-blur? true
-                          :on-change #(dispatch [::events/update-input-text project-name key %])]
-                         [h-box
-                          :children [[button
-                                      :label "eval"
-                                      :on-click #(dispatch [::events/eval-sci key input-text])]
-                                     [button
-                                      :label "save"
-                                      :on-click #(dispatch [::events/store-value ns-string input-text])]
-                                     [button
-                                      :label "load"
-                                      :on-click #(dispatch [::events/load-input-text])]]]
-                         [:p (or eval-result "Nil result!")]]]])))
-
-(defn station-editors
-  []
-  (let [stations @(re-frame/subscribe [::subs/station-keys])]
+(defn sci-editor
+  [ns-string]
+  (let [{:keys [input-text eval-result]} @(re-frame/subscribe [::subs/sci-values ns-string])]
     [v-box
      :gap "10px"
-     :children [(map (fn [key] [sci-interaction key]) stations)]]))
+     :children [[input-textarea
+                 :model input-text
+                 :rows 7
+                 :change-on-blur? true
+                 :on-change #(dispatch [::events/update-input-text ns-string %])]
+                [h-box
+                 :justify :between
+                 :children [[button
+                             :label "eval"
+                             :on-click #(dispatch [::events/eval-sci ns-string input-text])]
+                            [button
+                             :label "save"
+                             :on-click #(dispatch [::events/store-value ns-string input-text])]
+                            [button
+                             :label "load"
+                             :on-click #(dispatch [::events/load-input-text])]]]
+                [:p (or eval-result "Nil result!")]]]))
+
+(defn sci-interaction [initial-namespace]
+  (let [bg-color (listen :bg-primary)
+        ns-string (r/atom initial-namespace)
+        namespaces (re-frame/subscribe [::subs/sci-namespaces])]
+    (fn []
+      [draggable
+       [:div
+        {:style {:position "absolute"
+                 :border "2px solid"}}
+        [v-box
+         :style {:background @bg-color}
+         :src (at)
+         :size "grow"
+         :height "400"
+         :min-width "300"
+         :padding "10px"
+         :gap "10px"
+         :children [[:h3 "Editor"]
+                    ;;[box :attr {:id ns-string} :child ""]
+                    [typeahead
+                     :data-source (fn [input] (into [] (filter #(str/starts-with? % input) @namespaces)))
+                     :change-on-blur? true
+                     :rigid? false
+                     :model ns-string
+                     :on-change #(do
+                                   (.log js/console %)
+                                   (reset! ns-string %))]
+                    [sci-editor @ns-string]]]]])))
+
+(defn default-frame
+  ([child] [default-frame (gensym "frame-") child])
+  ([id child]
+   (let [bg-color (listen :bg-primary)
+         titlebar-bar (listen :bg-secondary)
+         popover-position (listen :popover-position)
+         show-body? (r/atom true)
+         show-properties? (r/atom false)]
+     (fn []
+       [draggable
+        {:handle ".handle"}
+        [:div
+         {:style {:position "absolute"
+                  :border   "2px solid"}}
+         [v-box
+          :style {:background @bg-color}
+          :src (at)
+          :size "grow"
+          :height "400"
+          :min-width "300"
+          :gap "10px"
+          :children [[popover-anchor-wrapper
+                      :src (at)
+                      :showing? show-properties?
+                      :position @popover-position
+                      :popover [popover-content-wrapper
+                                :src (at)
+                                :title (str "Properties for frame: " id)]
+                      :anchor [box :child "Title Bar"
+                               ;;                      :height "10px"
+                               :style {:background @titlebar-bar}
+                               :attr {:on-context-menu #(do
+                                                          (.preventDefault %)
+                                                          (swap! show-properties? not))
+                                      :on-double-click #(do
+                                                          (.preventDefault %)
+                                                          (swap! show-body? not))
+                                      :class-name "handle"
+                                      :draggable false}]]
+
+                     (when @show-body? child)]]]]))))
 
 (defn main-panel []
   (dispatch-keydown-rules)
   [re-com/v-box
    :src      (at)
-   :height   "100%"
+   :height   "100vh"
+   :width "100vw"
    :attr {:id "root-frame-panel"
           :on-context-menu #(do
                               (.preventDefault %)
-                              (.log js/console "context-menu-brah"))}
-   :children [[title]
-              [draggable [:div {:id "test-renderer"} "hi"]]
+                              (.log js/console %))}
+   :children [[default-frame [title]]
               [v-box
                :src (at)
                :height "100%"
-               :width "20%"
+               :width "fit-children"
                :padding "10px"
-               :children [[station-editors]]]]])
+               :children [[sci-interaction "example-project.default"]]]]])

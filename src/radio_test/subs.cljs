@@ -21,9 +21,9 @@
 
 (re-frame/reg-sub
  ::sci-values
- (fn [db [_ project-name key]]
-   (or (get-in db [:namespaces (keyword project-name) key])
-       {:input-text (cl-format nil "(ns ~a.~a)" project-name (key->js key))
+ (fn [db [_ ns-string]]
+   (or (get-in db [:namespaces (keyword ns-string)])
+       {:input-text (cl-format nil "(ns ~a\n  (:require [user :refer :all]))" ns-string)
         :eval-result nil})))
 
 (re-frame/reg-sub
@@ -33,9 +33,10 @@
 
 (re-frame/reg-sub
  ::sci-namespaces
- :<- [::sci-context]
- (fn [[ctx] [_]]
-   (sci/all-ns ctx)))
+ (fn [{:keys [namespaces]} [_]]
+   (->> namespaces
+        keys
+        (map key->js))))
 
 (re-frame/reg-sub
  ::station-keys

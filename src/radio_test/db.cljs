@@ -6,9 +6,14 @@
 
 (defonce context (init-context))
 
-(defn make-station [project-name key input-text]
-  {:input-text (cl-format nil "(ns ~a.~a ~%  (:require [user :refer :all]))~%~%~a" project-name (key->js key) input-text)
-   :eval-result nil})
+(defn make-station
+  "Loads a station from localStorage or uses a `input-test` if it doesn't exist"
+  [namespace input-text]
+  (let [namespace  (key->js namespace)
+        input-text (or (.getItem js/localStorage namespace)
+                       (cl-format nil "(ns ~a ~%  (:require [user :refer :all]))~%~%~a" namespace input-text))]
+    {:input-text  input-text
+     :eval-result nil}))
 
 (defn get-project-name
   []
@@ -16,13 +21,21 @@
       (string/split #"project/")
       (second)))
 
+(def default-styles
+  {:bg-primary "white"
+   :bg-secondary "grey"})
+
+(def default-global-values
+  {:advanced-keys false
+   :popover-position :above-center})
+
 (def default-db
   (let [project-name (get-project-name)]
-    {:name "radio-playground 📻"
+    {:name         "radio-playground 📻"
      :project-name project-name
-     :namespaces {(keyword project-name) {:default (make-station project-name :default "(emit :some-value 123)")
-                                          :another (make-station project-name :another "@(listen :some-value)")
-                                          :renderer (make-station project-name :renderer "(defn test-component []
+     :namespaces   {:example-project.default  (make-station :example-project.default "(emit :some-value 123)")
+                    :example-project.another  (make-station :example-project.another "@(listen :some-value)")
+                    :example-project.renderer (make-station :example-project.renderer "(defn test-component []
     (let [input @(listen :some-value)]
     [:div
       [:h1 \"The value is:\"]
@@ -31,8 +44,10 @@
 (defn example-button []
     [:button {:on-click #(emit :some-value 42069)} \"Click me!\"])
 
-(render [test-component])")}}
-     :sci {:ctx context
-           :global {:eval-result nil
-                    :shell-visible nil}
-           :channels {}}}))
+(render [test-component])")}
+     :sci {:ctx      context
+           :global   {:eval-result   nil
+                      :shell-visible nil}
+           :channels {}
+           :vars     (merge default-styles
+                            default-global-values)}}))

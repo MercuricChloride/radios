@@ -2,7 +2,8 @@
   (:require
    [re-frame.core :as re-frame :refer [dispatch]]
    [reagent.dom :as rdom]
-   [sci.core :as sci :refer [new-dynamic-var]]))
+   [sci.core :as sci :refer [new-dynamic-var]]
+   [re-com.core :as re-com]))
 
 ;; We added support for managing sci contexts
 ;; Specifically, these contexts can communicate via a central db, and can render their own contents.
@@ -21,11 +22,14 @@
   (new-dynamic-var  '*parent-id* "test-renderer"))
 
 (defn render
-  [component]
-  (let [root-element (.getElementById js/document @parent-id)]
-    (rdom/unmount-component-at-node root-element)
-    (rdom/render component root-element)
-    nil))
+  ([component]
+   (let [parent-id @parent-id]
+     (render component parent-id)))
+  ([component parent-id]
+   (let [root-element (.getElementById js/document parent-id)]
+     (rdom/unmount-component-at-node root-element)
+     (rdom/render component root-element)
+     nil)))
 
 (defn init-context
   ([] (init-context {}))
@@ -39,4 +43,5 @@
                        '*parent-id* parent-id
                        'render render}
                       bindings)
-     :namespaces {'rf (sci/copy-ns re-frame.core nil)}})))
+     :namespaces {'rf (sci/copy-ns re-frame.core nil)
+                  're-com (sci/copy-ns re-com.core nil)}})))

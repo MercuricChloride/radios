@@ -11,7 +11,7 @@
 (re-frame/reg-fx
  :local-store
  (fn [[path value]]
-   (.setItem js/localStorage (clj->js path) (prn-str value))))
+   (.setItem js/localStorage (clj->js path) (clj->js value))))
 
 ;; Loads local-storage into the cofx map
 (re-frame/reg-cofx
@@ -30,7 +30,7 @@
  :create-frame
  (fn [[frame-id component]]
    (let [app-root (.getElementById js/document "app")
-         el (.createElement js/document "div")]
+         el       (.createElement js/document "div")]
      (set! (.-id el) frame-id)
      (.appendChild app-root el)
      (rdom/unmount-component-at-node el)
@@ -57,8 +57,8 @@
 
 (re-frame/reg-event-db
  ::update-input-text
- (fn [db [_ project key value]]
-   (assoc-in db [:namespaces (keyword project) key :input-text] value)))
+ (fn [db [_ ns-string value]]
+   (assoc-in db [:namespaces (keyword ns-string) :input-text] value)))
 
 (re-frame/reg-event-fx
  ::log
@@ -68,7 +68,7 @@
 (re-frame/reg-event-db
  ::reset-context
  (fn [db [_ ctx]]
-   (let [_  (tap> ctx)
+   (let [_   (tap> ctx)
          ctx (sci/eval-string ctx)]
      (assoc-in db [:sci :ctx] (merge (init-context) ctx)))))
 
@@ -76,12 +76,11 @@
 
 (re-frame/reg-event-db
  ::eval-sci
- (fn [db [_ key input]]
-   (let [ctx (get-in db [:sci :ctx])
-         project-name (:project-name db)
-         result (sci/binding [parent-id (str project-name "." (key->js key))]
+ (fn [db [_ ns-string input]]
+   (let [ctx    (get-in db [:sci :ctx])
+         result (sci/binding [parent-id ns-string]
                   (sci/eval-string* ctx input))]
-     (assoc-in db [:sci :stations key :eval-result] result))))
+     (assoc-in db [:namespaces (keyword ns-string) :eval-result] result))))
 
 (re-frame/reg-event-db
  ::eval-all
@@ -90,9 +89,9 @@
                      (vals)
                      (map #(:input-text %))
                      (reduce str))
-         _ (tap> (->> (.getSelection js/window)
-                      (.toString)))
-         ctx (get-in db [:sci :ctx])
+         _      (tap> (->> (.getSelection js/window)
+                           (.toString)))
+         ctx    (get-in db [:sci :ctx])
          result (sci/eval-string* ctx source)]
      (assoc-in db [:sci :global :eval-result] result))))
 
