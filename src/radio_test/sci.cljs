@@ -3,7 +3,11 @@
    [re-frame.core :as re-frame :refer [dispatch]]
    [reagent.dom :as rdom]
    [sci.core :as sci :refer [new-dynamic-var]]
-   [re-com.core :as re-com]))
+   [re-com.core :as re-com]
+   [cljs-http.core :as https]
+   [reagent.core :as r]
+   [shadow.esm :refer (dynamic-import)]
+   [shadow.cljs.modern :refer (js-await)]))
 
 ;; We added support for managing sci contexts
 ;; Specifically, these contexts can communicate via a central db, and can render their own contents.
@@ -26,10 +30,11 @@
    (let [parent-id @parent-id]
      (render component parent-id)))
   ([component parent-id]
-   (let [root-element (.getElementById js/document parent-id)]
-     (rdom/unmount-component-at-node root-element)
-     (rdom/render component root-element)
-     nil)))
+   (dispatch [:radio-test.events/render-frame parent-id component])))
+
+(defn load-script [url cb]
+  (js-await [mod (dynamic-import url)]
+            (cb mod)))
 
 (defn init-context
   ([] (init-context {}))
@@ -41,7 +46,10 @@
                        'reset #(dispatch [:radio-test.events/reset-context])
                        'create-frame #(dispatch [:radio-test.events/create-frame %])
                        '*parent-id* parent-id
-                       'render render}
+                       'render render
+                       'import load-script}
                       bindings)
      :namespaces {'rf (sci/copy-ns re-frame.core nil)
-                  're-com (sci/copy-ns re-com.core nil)}})))
+                  're-com (sci/copy-ns re-com.core nil)
+                  'reagent (sci/copy-ns reagent.core nil)}
+     :classes {'js js/globalThis :allow :all}})))

@@ -10,6 +10,26 @@
    (:name db)))
 
 (re-frame/reg-sub
+ ::visible-frames
+ (fn [db [_]]
+   (->> (:frames db)
+        vals
+        (filter #(:visible? %))
+        (mapv #(:component %)))))
+
+(re-frame/reg-sub
+ ::frame-component
+ (fn [db [_ frame-id]]
+   (get-in db [:frames (keyword frame-id) :component])))
+
+(re-frame/reg-sub
+ ::frame-visible?
+ (fn [db [_ frame-id]]
+   (if-let [frame (get-in db [:frames (keyword frame-id)])]
+     (:visible? frame)
+     nil)))
+
+(re-frame/reg-sub
  ::project-name
  (fn [db]
    (:project-name db)))

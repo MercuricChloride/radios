@@ -4,8 +4,8 @@
    [radio-test.db :as db]
    [radio-test.sci :refer [init-context parent-id]]
    [re-frame.core :as re-frame :refer [inject-cofx]]
-   [sci.core :as sci]
-   [reagent.dom :as rdom]))
+   [reagent.dom :as rdom]
+   [sci.core :as sci]))
 
 ;; Stores an item in local storage
 (re-frame/reg-fx
@@ -19,23 +19,7 @@
  (fn [cfx path]
    (assoc cfx :local-storage (.getItem js/localStorge (clj->js path)))))
 
-;; This will grab an element from the dom, and store it in "root-element" in the cofx map
-(re-frame/reg-cofx
- :root-element
- (fn [cfx id]
-   (assoc cfx :root-element (.getElementById js/document (clj->js id)))))
-
 ;; This will create a new frame in the app
-(re-frame/reg-fx
- :create-frame
- (fn [[frame-id component]]
-   (let [app-root (.getElementById js/document "app")
-         el       (.createElement js/document "div")]
-     (set! (.-id el) frame-id)
-     (.appendChild app-root el)
-     (rdom/unmount-component-at-node el)
-     (rdom/render (or component [:h1 "hello!"]) el))))
-
 ;; INIT DB
 (re-frame/reg-event-db
  ::initialize-db
@@ -72,8 +56,6 @@
          ctx (sci/eval-string ctx)]
      (assoc-in db [:sci :ctx] (merge (init-context) ctx)))))
 
-(add-tap #(.log js/console %))
-
 (re-frame/reg-event-db
  ::eval-sci
  (fn [db [_ ns-string input]]
@@ -97,11 +79,21 @@
 
 ;; Frame Events
 ;; For creating new window frames
-(re-frame/reg-event-fx
- ::create-frame
- [(inject-cofx :root-element)]
- (fn [_cfx [_ frame-id component]]
-   {:create-frame [frame-id component]}))
+(re-frame/reg-event-db
+ ::render-frame
+ (fn [db [_ frame-id component]]
+   (let [wrapper (get-in db [:sci :vars :frame-wrapper])
+         component [wrapper frame-id component]]
+     ;; we check if it exists or not in the db, and if it does we just update the component field, otherwise we make it visible as well
+     (if-let [frame (get-in db [:frames (keyword frame-id) :component])]
+       (assoc-in db [:frames (keyword frame-id) :component] component)
+       (assoc-in db [:frames (keyword frame-id)] {:component component
+                                                  :visible?  true})))))
+
+(re-frame/reg-event-db
+ ::display-frame
+ (fn [db [_ frame-id visible?]]
+   (assoc-in db [:frames (keyword frame-id) :visible?] visible?)))
 
 ;; Storing Values
 (re-frame/reg-event-db
