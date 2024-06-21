@@ -1,8 +1,7 @@
 (ns radio-test.subs
   (:require
-   [re-frame.core :as re-frame]
-   [sci.core :as sci]
-   [cljs.pprint :refer [cl-format]]))
+   [cljs.pprint :refer [cl-format]]
+   [re-frame.core :as re-frame]))
 
 (re-frame/reg-sub
  ::name
@@ -12,27 +11,23 @@
 (re-frame/reg-sub
  ::visible-frames
  (fn [db [_]]
-   (->> (:frames db)
-        vals
-        (filter #(:visible? %))
-        (mapv #(:component %)))))
+   (let [{:keys [visible-fn render-fn]} (get-in db [:sci :vars])]
+     (->> (:frames db)
+          (vals)
+          (filter (or visible-fn #(:visible? %)))
+          (mapv (fn [v] [(:component v)]))))))
 
 (re-frame/reg-sub
- ::frame-component
- (fn [db [_ frame-id]]
-   (get-in db [:frames (keyword frame-id) :component])))
+ ::frame-data
+ (fn [db [_ id]]
+   (get-in db [:frames id])))
 
 (re-frame/reg-sub
- ::frame-visible?
- (fn [db [_ frame-id]]
-   (if-let [frame (get-in db [:frames (keyword frame-id)])]
-     (:visible? frame)
-     nil)))
-
-(re-frame/reg-sub
- ::project-name
- (fn [db]
-   (:project-name db)))
+ ::frame-pos
+ (fn [db [_ id]]
+   (or (get-in db [:frames id :pos])
+       {:x 0
+        :y 0})))
 
 (re-frame/reg-sub
  ::re-pressed-example
@@ -69,3 +64,8 @@
  ::get-var
  (fn [db [_ keys]]
    (get-in db (vec (concat [:sci :vars] keys)))))
+
+(re-frame/reg-sub
+ ::get-editor-state
+ (fn [db [_ ns-string]]
+   (get-in db [:editors (keyword ns-string)])))

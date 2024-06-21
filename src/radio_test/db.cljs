@@ -29,6 +29,13 @@
   {:advanced-keys false
    :popover-position :above-center})
 
+(def local-namespaces
+  (->> js/localStorage
+       (.entries js/Object)
+       (filter (fn [[k v]] (string/includes? v "(ns")))
+       (map (fn [[k v]] [(keyword k) {:input-text v}]))
+       (conj {})))
+
 (def default-namespaces
   {:example-project.default  (make-station :example-project.default "(emit :some-value 123)")
    :example-project.another  (make-station :example-project.another "@(listen :some-value)")
@@ -61,7 +68,7 @@
 
 (def default-db
   (let [project-name (get-project-name)
-        namespaces   (merge default-namespaces)]
+        namespaces   (merge default-namespaces local-namespaces)]
     {:name         "radio-playground 📻"
      :project-name project-name
      :namespaces   namespaces

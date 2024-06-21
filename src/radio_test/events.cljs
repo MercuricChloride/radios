@@ -2,9 +2,9 @@
   (:require
    [day8.re-frame.tracing :refer-macros [fn-traced]]
    [radio-test.db :as db]
+   [radio-test.editor :refer [editor-state]]
    [radio-test.sci :refer [init-context parent-id]]
-   [re-frame.core :as re-frame :refer [inject-cofx]]
-   [reagent.dom :as rdom]
+   [re-frame.core :as re-frame]
    [sci.core :as sci]))
 
 ;; Stores an item in local storage
@@ -57,6 +57,14 @@
      (assoc-in db [:sci :ctx] (merge (init-context) ctx)))))
 
 (re-frame/reg-event-db
+ ::eval-ns
+ (fn [db [_ namespace]]
+   (let [ctx    (get-in db [:sci :ctx])
+         input-text (get-in db [:namespaces namespace :input-text])
+         result (sci/eval-string* ctx input-text)]
+     (assoc-in db [:namespaces namespace :eval-result] result))))
+
+(re-frame/reg-event-db
  ::eval-sci
  (fn [db [_ ns-string input]]
    (let [ctx    (get-in db [:sci :ctx])
@@ -82,28 +90,37 @@
 (re-frame/reg-event-db
  ::render-frame
  (fn [db [_ frame-id component]]
-   (let [wrapper (get-in db [:sci :vars :frame-wrapper])
-         component [wrapper frame-id component]]
-     ;; we check if it exists or not in the db, and if it does we just update the component field, otherwise we make it visible as well
-     (if-let [frame (get-in db [:frames (keyword frame-id) :component])]
-       (assoc-in db [:frames (keyword frame-id) :component] component)
-       (assoc-in db [:frames (keyword frame-id)] {:component component
-                                                  :visible?  true})))))
+   (let [wrapper (get-in db [:sci :vars :frame-wrapper])]
+     (assoc-in db [:frames frame-id] {:component (fn [] [wrapper frame-id component])
+                                      :visible?  true}))))
 
 (re-frame/reg-event-db
- ::display-frame
+ ::set-frame-visible
  (fn [db [_ frame-id visible?]]
-   (assoc-in db [:frames (keyword frame-id) :visible?] visible?)))
+   (assoc-in db [:frames frame-id :visible?] visible?)))
+
+(re-frame/reg-event-db
+ ::update-frame-pos
+ (fn [db [_ id x y]]
+   (assoc-in db [:frames id :pos] {:x x :y y})))
 
 ;; Storing Values
 (re-frame/reg-event-db
  ::set-var
  (fn [db [_ key value]]
-   (if (coll? key)
-     (assoc-in db (vec (concat [:sci :vars] key)) value)
-     (assoc-in db [:sci :vars key] value))))
+   (assoc-in db [:sci :vars key] value)))
 
 (re-frame/reg-event-fx
  ::store-value
  (fn [_cofx [_ key value]]
    {:local-store [key value]}))
+
+;; Codemirror Editor specific events
+(re-frame/reg-event-db
+ ::create-editor-state
+ (fn [db [_ ns-string]]
+   (let [ns (keyword ns-string)
+         input-text (get-in db [:namespaces ns :input-text])
+         state (get-in db [:editors ns])]
+     (when-not state
+       (assoc-in db [:editors ns] (editor-state input-text))))))

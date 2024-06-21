@@ -33,6 +33,7 @@
    (dispatch [:radio-test.events/render-frame parent-id component])))
 
 (defn load-script [url cb]
+  (cb nil)
   (js-await [mod (dynamic-import url)]
             (cb mod)))
 

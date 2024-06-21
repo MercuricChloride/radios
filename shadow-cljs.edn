@@ -13,7 +13,8 @@
                 [cider/cider-nrepl "0.44.0"]
                 [org.babashka/sci "0.8.41"]
                 [binaryage/devtools "1.0.7"]
-                [cljs-http "0.1.48"]]
+                [cljs-http "0.1.48"]
+                [applied-science/js-interop "0.3.3"]]
 
  :dev-http {8280 "resources/public"
             8290 "target/browser-test"}

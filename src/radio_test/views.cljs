@@ -3,6 +3,7 @@
    ["react-draggable" :as -draggable]
    ["react-resizable" :refer [ResizableBox]]
    [clojure.string :as str]
+   [radio-test.editor :refer [editor]]
    [radio-test.events :as events]
    [radio-test.re-pressed :refer [dispatch-keydown-rules]]
    [radio-test.sci :refer [listen]]
@@ -11,7 +12,6 @@
    [re-com.buttons :refer [button]]
    [re-com.core :as re-com :refer [at box popover-anchor-wrapper
                                    popover-content-wrapper typeahead]]
-   [re-com.input-text :refer [input-textarea]]
    [re-frame.core :as re-frame :refer [dispatch subscribe]]
    [reagent.core :as r]))
 
@@ -23,20 +23,18 @@
     [re-com/title
      :src   (at)
      :label (str "Hello from " @name)
-     :level :level1
-     :attr {:id "something"}]))
+     :level :level1]))
 
 (defn sci-editor
   [ns-string]
   (let [ns-string @ns-string
         {:keys [input-text eval-result]} @(re-frame/subscribe [::subs/sci-values ns-string])]
     [v-box
+;;     :height "100%"
+;;     :width "100%"
      :gap "10px"
-     :children [[input-textarea
-                 :model input-text
-                 :rows 7
-                 :change-on-blur? true
-                 :on-change #(dispatch [::events/update-input-text ns-string %])]
+     :size "shrink"
+     :children [[editor :ns-string input-text]
                 [h-box
                  :justify :between
                  :children [[button
@@ -62,22 +60,43 @@
 (defn frame-context-menu
   "The context menu for a frame.
   Params:
-  `:closed` which should be an r/atom
-  `:id` string"
-  [& {:keys [id closed?]}]
+  `:id` keyword"
+  [& {:keys [id]}]
   (let [frame-params {}]
     [v-box
-     :padding "10px"
      :gap "10px"
      :width "100%"
      :children [[menu-item
                  :title "Delete:"
                  :body  [button
                          :label "Delete Frame"
-                         :on-click #(reset! closed? true)]]
+                         :on-click #(dispatch [::events/set-frame-visible id false])]]
                 [menu-item
                  :title "Id:"
                  :body id]]]))
+
+(defn draggable-frame [id child]
+  (let [pos (subscribe [::subs/frame-pos id])
+        hovered? (r/atom false)
+        dragging? (r/atom false)
+        bg-primary (listen :bg-primary)]
+    (fn []
+      [box
+       :size "1"
+       :style {:position "absolute"
+               :left (:x @pos)
+               :top (:y @pos)
+               :background @bg-primary
+               :border (if @hovered?
+                         "4px solid"
+                         "2px solid")}
+       :attr {:on-drag-start #(reset! dragging? true)
+              :on-drag-end #(do (reset! dragging? false)
+                                (dispatch [::events/update-frame-pos id (.-clientX %) (.-clientY %)]))
+              :draggable true
+              :on-mouse-over #(reset! hovered? true)
+              :on-mouse-out #(reset! hovered? false)}
+       :child child])))
 
 (defn default-frame
   ([child] [default-frame (gensym "frame-") child])
@@ -86,67 +105,62 @@
          titlebar-bar     (listen :bg-secondary)
          popover-position (listen :popover-position)
          show-body?       (r/atom true)
-         show-properties? (r/atom false)
-         closed?          (r/atom false)]
-     (fn [id child-component]
-       (when-not @closed?
-         [draggable
-          {:handle ".handle"}
-          [:div
-           {:style {:position "absolute"
-                    :border   "2px solid"}}
-           [v-box
-            :style {:background @bg-color}
-            :src (at)
-            :size "grow"
-            :height "400"
-            :min-width "300"
-            :gap "10px"
-            :children [[popover-anchor-wrapper
-                        :src      (at)
-                        :showing? show-properties?
-                        :position @popover-position
-                        :popover  [popover-content-wrapper
-                                   :src (at)
-                                   :title "Frame menu"
-                                   :width "300px"
-                                   :body [frame-context-menu
-                                          :id id
-                                          :closed? closed?]]
-                        :anchor   [box :child "Title Bar"
-                                   :style {:background @titlebar-bar}
-                                   :attr  {:on-context-menu #(do (.preventDefault %)
-                                                                 (swap! show-properties? not))
-                                           :on-double-click #(do (.preventDefault %)
-                                                                 (swap! show-body? not))
-                                           :class-name      "handle"
-                                           :draggable       false}]]
-                       (when @show-body?
-                         [box :child child-component])]]]])))))
+         show-properties? (r/atom false)]
+     (fn []
+       [draggable-frame
+        id
+        [v-box
+         :children
+         [[popover-anchor-wrapper
+           :src      (at)
+           :showing? show-properties?
+           :position @popover-position
+           :popover  [popover-content-wrapper
+                      :src (at)
+                      :title "Frame menu"
+                      :width "300px"
+                      :height "fit-content"
+                      :body [frame-context-menu
+                             :id id]]
+           :anchor   [box
+                      :size "30px"
+                      :justify :center
+                      :align :center
+                      :child (str (clj->js id))
+                      :style           {:background @titlebar-bar
+                                        :width      "100%"}
+                      :attr {:on-context-menu #(do (.preventDefault %)
+                                                   (swap! show-properties? not))
+                             :on-double-click #(do (js/console.log %)
+                                                   (js/console.log @show-body?)
+                                                   (.preventDefault %)
+                                                   (swap! show-body? not))}]]
+          [:<> child-component]]]]))))
 
 (defn sci-interaction [initial-namespace]
   (let [ns-string (r/atom initial-namespace)
         namespaces (re-frame/subscribe [::subs/sci-namespaces])]
     (fn []
       [:<>
-       [:h3 "Editor: "]
        [typeahead
         :data-source (fn [input] (into [] (filter #(str/starts-with? % input) @namespaces)))
         :change-on-blur? true
         :rigid? false
         :model ns-string
-        :on-change #(do
-                      (.log js/console %)
-                      (reset! ns-string %))]
+        :width "100%"
+        :height "100%"
+        :on-change #(reset! ns-string %)]
        [sci-editor ns-string]])))
 
 (defn dispatch-default-frames []
   (dispatch [::events/set-var :frame-wrapper default-frame])
-  (dispatch [::events/render-frame :default-editor [sci-interaction "example-project.default"]])
-  (dispatch [::events/render-frame :greeting [title]]))
+  (dispatch [::events/set-var :visible-fn #(:visible? %)])
+  (dispatch [::events/set-var :render-fn #(:component %)])
+  (dispatch [::events/render-frame :default-editor [sci-interaction "startup"]])
+  (dispatch [::events/render-frame :greeting [title]])
+  (dispatch [::events/eval-ns :startup]))
 
 (defn main-panel []
-  (dispatch-default-frames)
   (dispatch-keydown-rules)
   (let [visible-frames (subscribe [::subs/visible-frames])]
     (fn []
@@ -158,12 +172,4 @@
               :on-context-menu #(do
                                   (.preventDefault %)
                                   (.log js/console %))}
-       :children @visible-frames
-       ;;[default-frame [title]]
-       ;; [v-box
-       ;;  :src (at)
-       ;;  :height "100%"
-       ;;  :width "fit-children"
-       ;;  :padding "10px"
-       ;;  :children [[sci-interaction "example-project.default"]]]
-       ])))
+       :children @visible-frames])))

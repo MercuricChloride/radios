@@ -1,0 +1,24 @@
+#codemirror-wrapper {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+}
+
+.frame-horiz {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+}
+
+.frame-vert {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+
+#codemirror-wrapper-wrapper {
+  position: relative;
+  overflow-y: auto;
+}

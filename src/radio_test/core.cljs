@@ -10,17 +10,18 @@
 
 (defn dev-setup []
   (when config/debug?
-    (println "dev mode")))
+    (println "dev mode")
+    (devtools/install!)))
 
 (defn ^:dev/after-load mount-root []
   (re-frame/clear-subscription-cache!)
   (let [root-el (.getElementById js/document "app")]
     (rdom/unmount-component-at-node root-el)
-    (rdom/render [views/main-panel] root-el)
-    (devtools/install!)))
+    (rdom/render [views/main-panel] root-el)))
 
 (defn init []
   (re-frame/dispatch-sync [::events/initialize-db])
-  (re-frame/dispatch-sync [::rp/add-keyboard-event-listener "keydown"])
+  (views/dispatch-default-frames)
+  ;;(re-frame/dispatch-sync [::rp/add-keyboard-event-listener "keydown"])
   (dev-setup)
   (mount-root))
